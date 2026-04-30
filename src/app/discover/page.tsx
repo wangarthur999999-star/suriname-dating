@@ -88,37 +88,44 @@ export default function DiscoverPage() {
 
     setLikingUserId(targetUserId);
 
-    const { error: likeError } = await supabase.from("likes").insert({
-      from_user: currentUserId,
-      to_user: targetUserId,
-    });
+    try {
+      const { error: likeError } = await supabase.from("likes").insert({
+        from_user: currentUserId,
+        to_user: targetUserId,
+      });
 
-    if (likeError) {
-      console.error(likeError);
-      alert(likeError.message);
+      const isDuplicateLike =
+        likeError?.code === "23505" || likeError?.message.toLowerCase().includes("duplicate key") === true;
+
+      if (likeError && !isDuplicateLike) {
+        console.error(likeError);
+        alert(likeError.message);
+        return;
+      }
+
+      if (likeError && isDuplicateLike) {
+        console.error(likeError);
+      }
+
+      setProfiles((prev) => prev.filter((profile) => profile.id !== targetUserId));
+
+      const { data: isMatch, error: matchError } = await supabase.rpc("has_mutual_like", {
+        user_a: currentUserId,
+        user_b: targetUserId,
+      });
+
+      if (matchError) {
+        console.error(matchError);
+        alert(matchError.message);
+        return;
+      }
+
+      if (isMatch) {
+        alert("It's a match! Check Matches to chat on WhatsApp.");
+      }
+    } finally {
       setLikingUserId(null);
-      return;
     }
-
-    const { data: isMatch, error: matchError } = await supabase.rpc("has_mutual_like", {
-      user_a: currentUserId,
-      user_b: targetUserId,
-    });
-
-    if (matchError) {
-      console.error(matchError);
-      alert(matchError.message);
-      setLikingUserId(null);
-      return;
-    }
-
-    setProfiles((prev) => prev.filter((profile) => profile.id !== targetUserId));
-
-    if (isMatch) {
-      alert("It's a match!");
-    }
-
-    setLikingUserId(null);
   };
 
   return (
