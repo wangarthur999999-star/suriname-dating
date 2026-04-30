@@ -64,6 +64,14 @@ export default function OnboardingPage() {
       return;
     }
 
+    const sanitizedWhatsapp = whatsapp.replace(/\D/g, "");
+    const whatsappError = "WhatsApp should include country code, e.g. 597xxxxxxx";
+
+    if (!sanitizedWhatsapp.startsWith("597") || sanitizedWhatsapp.length < 10) {
+      setErrorMessage(whatsappError);
+      return;
+    }
+
     setSubmitting(true);
     setErrorMessage(null);
 
@@ -79,7 +87,7 @@ export default function OnboardingPage() {
         gender,
         interested_in: interestedIn,
         bio: bio.trim() || null,
-        whatsapp: whatsapp.trim(),
+        whatsapp: sanitizedWhatsapp,
         location: locationPoint,
       });
 
