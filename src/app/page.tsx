@@ -1,14 +1,60 @@
 "use client";
 
 import { createClient } from "@/lib/supabase";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 export default function Home() {
+  const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const checkSessionAndProfile = async () => {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !sessionData.session) {
+        if (sessionError) {
+          console.error(sessionError);
+        }
+        setCheckingAuth(false);
+        return;
+      }
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        if (userError) {
+          console.error(userError);
+        }
+        setCheckingAuth(false);
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error(profileError);
+        setCheckingAuth(false);
+        return;
+      }
+
+      router.replace(profile ? "/discover" : "/onboarding");
+    };
+
+    void checkSessionAndProfile();
+  }, [router, supabase]);
 
   const handleGoogleLogin = async () => {
     setLoading(true);
-    const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -20,6 +66,14 @@ export default function Home() {
       setLoading(false);
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white px-6">
+        <p className="text-sm text-gray-500">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-white px-6">

@@ -2,14 +2,14 @@
 
 import { createClient } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type GenderOption = "male" | "female" | "other";
 type InterestedInOption = "male" | "female" | "everyone";
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -25,22 +25,47 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
 
-      if (error || !data.user) {
+      if (error || !user) {
         if (error) {
           console.error(error);
         }
         router.replace("/");
+        setCheckingAuth(false);
         return;
       }
 
-      setUserId(data.user.id);
+      setUserId(user.id);
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("nickname, gender, interested_in, bio, whatsapp")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error(profileError);
+        setCheckingAuth(false);
+        return;
+      }
+
+      if (profile) {
+        setNickname(profile.nickname ?? "");
+        setGender((profile.gender as GenderOption) ?? "male");
+        setInterestedIn((profile.interested_in as InterestedInOption) ?? "female");
+        setBio(profile.bio ?? "");
+        setWhatsapp(profile.whatsapp ?? "");
+      }
+
       setCheckingAuth(false);
     };
 
     void checkUser();
-  }, [router, supabase.auth]);
+  }, [router, supabase]);
 
   const getCurrentPosition = () =>
     new Promise<GeolocationPosition>((resolve, reject) => {
