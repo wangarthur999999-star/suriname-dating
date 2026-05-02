@@ -19,6 +19,7 @@ export default function OnboardingPage() {
   const [interestedIn, setInterestedIn] = useState<InterestedInOption>("female");
   const [bio, setBio] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [confirmedRealWhatsapp, setConfirmedRealWhatsapp] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -91,6 +92,12 @@ export default function OnboardingPage() {
 
     const sanitizedWhatsapp = whatsapp.replace(/\D/g, "");
     const whatsappError = "WhatsApp should include country code, e.g. 597xxxxxxx";
+    const confirmationError = "Please confirm this is your real WhatsApp number.";
+
+    if (!confirmedRealWhatsapp) {
+      setErrorMessage(confirmationError);
+      return;
+    }
 
     if (!sanitizedWhatsapp.startsWith("597") || sanitizedWhatsapp.length < 10) {
       setErrorMessage(whatsappError);
@@ -200,6 +207,22 @@ export default function OnboardingPage() {
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500"
               placeholder="+597..."
             />
+            <p className="mt-2 text-xs text-gray-500">
+              Use your real WhatsApp number. You will only be contacted after a mutual match.
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              If your number is fake, matches will not be able to contact you.
+            </p>
+          </label>
+
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              checked={confirmedRealWhatsapp}
+              onChange={(event) => setConfirmedRealWhatsapp(event.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-gray-300"
+            />
+            <span className="text-sm text-gray-700">I confirm this is my real WhatsApp number.</span>
           </label>
 
           {errorMessage ? (

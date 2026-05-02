@@ -30,9 +30,39 @@ export default function MatchesPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [matches, setMatches] = useState<MatchedProfile[]>([]);
+  const [reportingUserId, setReportingUserId] = useState<string | null>(null);
+  const [reportSubmittedById, setReportSubmittedById] = useState<Record<string, boolean>>({});
+
+  const handleReportInvalidWhatsapp = async (reportedUserId: string) => {
+    if (!currentUserId) {
+      return;
+    }
+
+    setReportingUserId(reportedUserId);
+
+    const { error } = await supabase.from("reports").insert({
+      reporter: currentUserId,
+      reported_user: reportedUserId,
+      reason: "invalid_whatsapp",
+    });
+
+    if (error) {
+      console.error(error);
+      setErrorMessage(error.message);
+      setReportingUserId(null);
+      return;
+    }
+
+    setReportSubmittedById((prev) => ({
+      ...prev,
+      [reportedUserId]: true,
+    }));
+    setReportingUserId(null);
+  };
 
   useEffect(() => {
     const loadMatches = async () => {
@@ -51,6 +81,8 @@ export default function MatchesPage() {
         router.replace("/");
         return;
       }
+
+      setCurrentUserId(user.id);
 
       const { data: matchRows, error: matchesError } = await supabase
         .from("matches")
@@ -103,12 +135,20 @@ export default function MatchesPage() {
       <section className="mx-auto w-full max-w-md">
         <header className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Matches</h1>
-          <button
-            onClick={() => router.push("/discover")}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700"
-          >
-            Back to Discover
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push("/onboarding")}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700"
+            >
+              Edit my WhatsApp
+            </button>
+            <button
+              onClick={() => router.push("/discover")}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700"
+            >
+              Back to Discover
+            </button>
+          </div>
         </header>
 
         {loading ? <p className="text-sm text-gray-500">Loading matches...</p> : null}
@@ -155,6 +195,20 @@ export default function MatchesPage() {
                   </a>
                 );
               })()}
+
+              <button
+                onClick={() => {
+                  void handleReportInvalidWhatsapp(profile.id);
+                }}
+                disabled={!currentUserId || reportingUserId === profile.id || reportSubmittedById[profile.id]}
+                className="mt-2 text-sm text-gray-600 underline underline-offset-2 disabled:opacity-50"
+              >
+                {reportingUserId === profile.id ? "Submitting..." : "Report invalid WhatsApp"}
+              </button>
+
+              {reportSubmittedById[profile.id] ? (
+                <p className="mt-1 text-sm text-green-700">Report submitted</p>
+              ) : null}
             </article>
           ))}
         </div>

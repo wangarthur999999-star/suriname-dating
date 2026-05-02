@@ -12,6 +12,22 @@ type NearbyProfile = {
   distance_meters: number;
 };
 
+function getDistanceLabel(distanceMeters: number) {
+  if (distanceMeters < 1000) {
+    return "< 1 km";
+  }
+
+  if (distanceMeters < 3000) {
+    return "1–3 km";
+  }
+
+  if (distanceMeters < 10000) {
+    return "3–10 km";
+  }
+
+  return "10+ km";
+}
+
 export default function DiscoverPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -20,12 +36,14 @@ export default function DiscoverPage() {
   const [profiles, setProfiles] = useState<NearbyProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showLocationRefresh, setShowLocationRefresh] = useState(false);
   const [likingUserId, setLikingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadProfiles = async () => {
       setLoading(true);
       setErrorMessage(null);
+      setShowLocationRefresh(false);
 
       const {
         data: { user },
@@ -71,6 +89,16 @@ export default function DiscoverPage() {
         },
         (geoError) => {
           console.error(geoError);
+
+          if (geoError.code === 1) {
+            setErrorMessage(
+              "Location is needed to find people nearby. Please allow location access in your browser settings and refresh."
+            );
+            setShowLocationRefresh(true);
+            setLoading(false);
+            return;
+          }
+
           setErrorMessage(geoError.message || "Failed to get current location.");
           setLoading(false);
         },
@@ -144,7 +172,17 @@ export default function DiscoverPage() {
         {loading ? <p className="text-sm text-gray-500">Loading nearby people...</p> : null}
 
         {!loading && errorMessage ? (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{errorMessage}</p>
+          <div className="space-y-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p>{errorMessage}</p>
+            {showLocationRefresh ? (
+              <button
+                onClick={() => window.location.reload()}
+                className="rounded-md border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-700"
+              >
+                Refresh
+              </button>
+            ) : null}
+          </div>
         ) : null}
 
         {!loading && !errorMessage && profiles.length === 0 ? (
@@ -156,8 +194,9 @@ export default function DiscoverPage() {
             <article key={profile.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <div className="mb-2 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">{profile.nickname}</h2>
-                <span className="text-xs text-gray-500">{(profile.distance_meters / 1000).toFixed(1)} km</span>
+                <span className="text-xs text-gray-500">{getDistanceLabel(profile.distance_meters)}</span>
               </div>
+              <p className="text-sm text-gray-500">Active nearby</p>
               <p className="text-sm text-gray-600">Gender: {profile.gender}</p>
               <p className="mt-1 text-sm text-gray-700">{profile.bio || "No bio yet."}</p>
               <button
