@@ -14,7 +14,7 @@ export default function Home() {
 
   useEffect(() => {
     const userAgent = window.navigator.userAgent;
-    setIsInAppBrowser(/MicroMessenger|WebView/i.test(userAgent));
+    setIsInAppBrowser(/MicroMessenger|FBAN|FBAV|Instagram|Line|WebView/i.test(userAgent));
 
     const checkSessionAndProfile = async () => {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -100,8 +100,9 @@ export default function Home() {
         {isInAppBrowser ? (
           <div className="space-y-3">
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              Please open this page in Chrome or Safari to continue login.
+              Please open this page in Chrome or Safari to continue.
             </p>
+            <p className="text-xs text-gray-500">https://suriname-dating-vkfr.vercel.app</p>
             <button
               onClick={() => {
                 void handleCopyLink();

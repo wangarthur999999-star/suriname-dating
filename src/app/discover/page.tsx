@@ -36,14 +36,15 @@ export default function DiscoverPage() {
   const [profiles, setProfiles] = useState<NearbyProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [showLocationRefresh, setShowLocationRefresh] = useState(false);
+  const [locationNotice, setLocationNotice] = useState<string | null>(null);
   const [likingUserId, setLikingUserId] = useState<string | null>(null);
+  const [likedUserId, setLikedUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadProfiles = async () => {
       setLoading(true);
       setErrorMessage(null);
-      setShowLocationRefresh(false);
+      setLocationNotice(null);
 
       const {
         data: { user },
@@ -60,47 +61,40 @@ export default function DiscoverPage() {
 
       setCurrentUserId(user.id);
 
-      if (!navigator.geolocation) {
-        setErrorMessage("Geolocation is not supported by your browser.");
+      const fetchNearbyProfiles = async (lat: number, lng: number) => {
+        const { data, error } = await supabase.rpc("get_nearby_profiles", {
+          lat,
+          lng,
+          max_distance_meters: 50000,
+          limit_count: 20,
+        });
+
+        if (error) {
+          console.error(error);
+          setErrorMessage(error.message);
+          setLoading(false);
+          return;
+        }
+
+        setProfiles((data ?? []) as NearbyProfile[]);
         setLoading(false);
+      };
+
+      if (!navigator.geolocation) {
+        setLocationNotice("Location not enabled. Showing people in Paramaribo.");
+        await fetchNearbyProfiles(5.852, -55.203);
         return;
       }
 
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude: lat, longitude: lng } = position.coords;
-
-          const { data, error } = await supabase.rpc("get_nearby_profiles", {
-            lat,
-            lng,
-            max_distance_meters: 50000,
-            limit_count: 20,
-          });
-
-          if (error) {
-            console.error(error);
-            setErrorMessage(error.message);
-            setLoading(false);
-            return;
-          }
-
-          setProfiles((data ?? []) as NearbyProfile[]);
-          setLoading(false);
+          await fetchNearbyProfiles(lat, lng);
         },
-        (geoError) => {
+        async (geoError) => {
           console.error(geoError);
-
-          if (geoError.code === 1) {
-            setErrorMessage(
-              "Location is needed to find people nearby. Please allow location access in your browser settings and refresh."
-            );
-            setShowLocationRefresh(true);
-            setLoading(false);
-            return;
-          }
-
-          setErrorMessage(geoError.message || "Failed to get current location.");
-          setLoading(false);
+          setLocationNotice("Location not enabled. Showing people in Paramaribo.");
+          await fetchNearbyProfiles(5.852, -55.203);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
@@ -110,10 +104,11 @@ export default function DiscoverPage() {
   }, [router, supabase]);
 
   const handleLike = async (targetUserId: string) => {
-    if (!currentUserId || likingUserId) {
+    if (!currentUserId || likingUserId || likedUserId) {
       return;
     }
 
+    setErrorMessage(null);
     setLikingUserId(targetUserId);
 
     try {
@@ -127,7 +122,7 @@ export default function DiscoverPage() {
 
       if (likeError && !isDuplicateLike) {
         console.error(likeError);
-        alert(likeError.message);
+        setErrorMessage(likeError.message);
         return;
       }
 
@@ -135,7 +130,8 @@ export default function DiscoverPage() {
         console.error(likeError);
       }
 
-      setProfiles((prev) => prev.filter((profile) => profile.id !== targetUserId));
+      setLikingUserId(null);
+      setLikedUserId(targetUserId);
 
       const { data: isMatch, error: matchError } = await supabase.rpc("has_mutual_like", {
         user_a: currentUserId,
@@ -144,13 +140,14 @@ export default function DiscoverPage() {
 
       if (matchError) {
         console.error(matchError);
-        alert(matchError.message);
-        return;
-      }
-
-      if (isMatch) {
+        setErrorMessage(matchError.message);
+      } else if (isMatch) {
         alert("It's a match! Check Matches to chat on WhatsApp.");
       }
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      setProfiles((prev) => prev.filter((profile) => profile.id !== targetUserId));
+      setLikedUserId(null);
     } finally {
       setLikingUserId(null);
     }
@@ -169,20 +166,14 @@ export default function DiscoverPage() {
           </button>
         </header>
 
+        {locationNotice ? (
+          <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{locationNotice}</p>
+        ) : null}
+
         {loading ? <p className="text-sm text-gray-500">Loading nearby people...</p> : null}
 
         {!loading && errorMessage ? (
-          <div className="space-y-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-            <p>{errorMessage}</p>
-            {showLocationRefresh ? (
-              <button
-                onClick={() => window.location.reload()}
-                className="rounded-md border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-700"
-              >
-                Refresh
-              </button>
-            ) : null}
-          </div>
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{errorMessage}</p>
         ) : null}
 
         {!loading && !errorMessage && profiles.length === 0 ? (
@@ -201,10 +192,14 @@ export default function DiscoverPage() {
               <p className="mt-1 text-sm text-gray-700">{profile.bio || "No bio yet."}</p>
               <button
                 onClick={() => handleLike(profile.id)}
-                disabled={likingUserId === profile.id}
+                disabled={Boolean(likingUserId || likedUserId)}
                 className="mt-3 w-full rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700 disabled:opacity-60"
               >
-                {likingUserId === profile.id ? "Liking..." : "Like"}
+                {likingUserId === profile.id
+                  ? "Liking..."
+                  : likedUserId === profile.id
+                    ? `You liked ${profile.nickname} ✔`
+                    : "Like"}
               </button>
             </article>
           ))}
